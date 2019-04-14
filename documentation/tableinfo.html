@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Info</title>
+    <script>
+    
+    function init() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fullTableName = urlParams.get('table');
+        document.querySelector('#tablename').innerHTML = fullTableName;
+        const parts = fullTableName.split('.');
+        const tableName = (parts.length > 1) ? parts[1] : parts[0];
+        fetch(`../v1/list_columns/${tableName}`).then(response=>{
+            if (response.ok) {
+                response.json().then(json=> {
+                    const list = document.querySelector('#columns');
+                    for (item of json) {
+                        const li = document.createElement('li');
+                        li.innerHTML = `<a href="./attrinfo.html?table=${fullTableName}&column=${item.field_name}&columntype=${item.field_type}"><b>${item.field_name}</b></a> (${item.field_type})`
+                        list.appendChild(li);
+                    }
+                })
+            }
+        })
+        fetch(`../v1/bbox/${fullTableName}`).then(response=>{
+            if (response.ok) {
+                response.json().then(json=> {
+                    const bbox = document.querySelector('#bbox');
+                    bbox.innerHTML = "";
+                    for (item of json) {
+                        bbox.innerHTML += item.bbox;  
+                    }
+                })
+            }
+        })
+    }
+    </script>
+</head>
+<body onload="init()">
+    <h1>Layer informatie</h1>
+    <h2 id="tablename"></h2>
+    <div id="bbox">waiting for bbox...</div>
+    <ul id="columns"></ul>
+    <a href="info.html">Terug naar layer overzicht</a>
+</body>
+</html>
