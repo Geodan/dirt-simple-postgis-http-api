@@ -6,13 +6,13 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Info</title>
     <style>
-        #canvascontainer {width: 500px; height: auto; border: 1px solid lightblue}
+        .canvascontainer {width: 500px; height: auto; border: 1px solid lightblue}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
     <script>
     "use strict";
 
-    let chart = null;
+    let chart1 = null, chart2 = null;
 
     function quantile(arr, p) {
         let len = arr.length, id;
@@ -56,7 +56,7 @@
         if (range === 0) {
             tickSpacing = 1;
         } else {
-            tickSpacing = niceNumbers(range / (maxTicks - 1), true);
+            tickSpacing = niceNumbers(range / (maxTicks), true);
         }
         return {
             min: Math.floor(min / tickSpacing) * tickSpacing,
@@ -89,8 +89,8 @@
         fetch(`../v1/query/${fullTableName}?columns=${attrName}`).then(response=>{
             if (response.ok) {
                 response.json().then(json=> {
-                    let histogram;
-                    let labels = [];
+                    let histogram, verdeling;
+                    let histLabels = [], verdLabels = [];
                     let arr;
                     switch(attrType) {
                         case "varchar":
@@ -104,17 +104,24 @@
                                 const count = histogram.get(value);
                                 histogram.set(value, count?count+1:1);
                             }
-                            labels = Array.from(histogram.keys());
+                            histLabels = Array.from(histogram.keys());
                             break;
                         case "int4":
+                        case "int8":
                         case "float8":
                         case "numeric":
+                            verdeling = new Map();
                             histogram = new Map();
                             arr = json
                                 .sort((item1,item2)=>item1[attrName]-item2[attrName])
                                 .map(item=>item[attrName])
                                 .filter(value=>value !== null)
                                 .filter(value=>value !== undefined);
+                            const sampleInterval = Math.ceil(arr.length / 100);
+                            for (let i = 0; i * sampleInterval < arr.length; i++) {
+                                verdeling.set(i, arr[i*sampleInterval]);
+                                verdLabels.push(`${1 + i * sampleInterval}`);
+                            }
                             const min = arr[0];
                             const max = arr[arr.length - 1];
                             const iqr = quantile(arr, 0.75) - quantile(arr, 0.25);
@@ -140,9 +147,9 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
                                 const start = Math.round(10000 * (linearTicks.min + i * binwidth)) / 10000;
                                 const end = Math.round(10000 * (linearTicks.min + (i+1) * binwidth)) / 10000;
                                 if (linearTicks.max === linearTicks.min) {
-                                    labels.push(`${start}`)
+                                    histLabels.push(`${start}`)
                                 } else {
-                                    labels.push(`${start} - ${end}`);
+                                    histLabels.push(`${start} - ${end}`);
                                 }
                             }
                             for (let i = 0; i < arr.length; i++) {
@@ -154,15 +161,15 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
                     }
                     if (histogram) {
                         const values = Array.from(histogram.values());
-                        const canvas = document.querySelector('canvas');
+                        const canvas = document.querySelector('#histogram');
                         const ctx = canvas.getContext('2d');
-                        if (chart) {
-                            chart.destroy();
+                        if (chart1) {
+                            chart1.destroy();
                         }
-                        chart = new Chart(ctx, {
+                        chart1 = new Chart(ctx, {
                             type: 'bar',
                             data: {
-                                labels: labels,
+                                labels: histLabels,
                                 datasets: [{
                                     label: `aantal ${tableName}`,
                                     data: values,
@@ -188,7 +195,42 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
                             }
                         });
                     }
-        
+                    if (verdeling) {
+                        const values = Array.from(verdeling.values());
+                        const canvas = document.querySelector('#verdeling');
+                        const ctx = canvas.getContext('2d');
+                        if (chart2) {
+                            chart2.destroy();
+                        }
+                        chart2 = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: verdLabels,
+                                datasets: [{
+                                    label: `${attrName}`,
+                                    data: values,
+                                    backgroundColor: "blue",
+                                    borderColor: "white",
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                title: {
+                                    display: true,
+                                    position: 'bottom',
+                                    padding: 0,
+                                    text: tableName
+                                },
+                                scales: {
+                                    yAxes: [{
+                                        ticks: {
+                                            beginAtZero: true
+                                        }
+                                    }]
+                                }
+                            }
+                        });
+                    }
                 })
             }
         })
@@ -200,7 +242,8 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
     <h2 id="tablename"></h2>
     <h2 id="columnname"></h2>
     <div id="attrinfo"></div>
-    <div id="canvascontainer"><canvas width=1000 height=500></canvas></div>
+    <div class="canvascontainer"><canvas id="histogram" width=1000 height=500></canvas></div>
+    <div class="canvascontainer"><canvas id="verdeling" width=1000 height=500></canvas></div>
     <div id="back"></div>
 </body>
 </html>
