@@ -114,7 +114,7 @@
                             histogram = new Map();
                             arr = json
                                 .map(item=>{
-                                    const result = item[attrName];
+                                    let result = item[attrName];
                                     if (typeof result === "string") {
                                         result = 0 + result;
                                     }
