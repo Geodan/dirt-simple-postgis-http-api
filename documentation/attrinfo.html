@@ -116,7 +116,10 @@
                                 .map(item=>{
                                     let result = item[attrName];
                                     if (typeof result === "string") {
-                                        result = 0 + result;
+                                        result = Number(result);
+                                        if (isNaN(result)) {
+                                            result = undefined;
+                                        }
                                     }
                                     return result;
                                 })
