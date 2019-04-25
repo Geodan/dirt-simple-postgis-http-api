@@ -113,10 +113,18 @@
                             verdeling = new Map();
                             histogram = new Map();
                             arr = json
-                                .sort((item1,item2)=>item1[attrName]-item2[attrName])
-                                .map(item=>item[attrName])
+                                .map(item=>{
+                                    const result = item[attrName];
+                                    if (typeof result === "string") {
+                                        result = 0 + result;
+                                    }
+                                    return result;
+                                })
                                 .filter(value=>value !== null)
-                                .filter(value=>value !== undefined);
+                                .filter(value=>value !== undefined)                                
+                                .sort((value1,value2)=>value1-value2)
+                                
+                                
                             const sampleInterval = Math.ceil(arr.length / 100);
                             for (let i = 0; i * sampleInterval < arr.length; i++) {
                                 verdeling.set(i, arr[i*sampleInterval]);
