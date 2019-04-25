@@ -10,6 +10,7 @@
     function init() {
         const urlParams = new URLSearchParams(window.location.search);
         const fullTableName = urlParams.get('table');
+        const geomType = urlParams.get('geomtype');
         document.querySelector('#tablename').innerHTML = fullTableName;
         const parts = fullTableName.split('.');
         const tableName = (parts.length > 1) ? parts[1] : parts[0];
@@ -19,7 +20,7 @@
                     const list = document.querySelector('#columns');
                     for (item of json) {
                         const li = document.createElement('li');
-                        li.innerHTML = `<a href="./attrinfo.html?table=${fullTableName}&column=${item.field_name}&columntype=${item.field_type}"><b>${item.field_name}</b></a> (${item.field_type})`
+                        li.innerHTML = `<a href="./attrinfo.html?table=${fullTableName}&column=${item.field_name}&columntype=${item.field_type}&geomtype=${geomType}"><b>${item.field_name}</b></a> (${item.field_type})`
                         list.appendChild(li);
                     }
                 })

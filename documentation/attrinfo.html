@@ -7,8 +7,12 @@
     <title>Info</title>
     <style>
         .canvascontainer {width: 500px; height: auto; border: 1px solid lightblue}
+        #map {display: inline-block; width: 500px; height: 500px; border: 1 px solid lightblue;}
+        #info {display: inline-block;}
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.1/mapbox-gl.css' rel='stylesheet' />
     <script>
     "use strict";
 
@@ -64,12 +68,139 @@
             tickWidth: tickSpacing
         };
     }
+
+    let map = null;
+
+    function initMap()
+    {
+        map = new mapboxgl.Map({
+            container: 'map',
+            "style": {
+                "version": 8,
+                "name": "DefaultBaseStyle",
+                "id": "defaultbasestyle",
+                "glyphs": `https://free.tilehosting.com/fonts/{fontstack}/{range}.pbf?key=`,
+                "sources": {
+                    "osmgrijs": {
+                        "type":"raster",
+                        "tileSize":256,
+                        "tiles":[
+                          "https://tiles.edugis.nl/mapproxy/osm/tiles/osmgrayscale_EPSG900913/{z}/{x}/{y}.png?origin=nw"
+                        ],
+                        "attribution":"&copy; <a href=\"https://www.openstreetmap.org/about\" target=\"copyright\">OpenStreetMap contributors</a>"
+                    }
+                },
+                "layers": [
+                    {
+                        "id": "osmgrijs",
+                        "type": "raster",
+                        "source": "osmgrijs"
+                    }
+                ]
+            }
+        });
+        map.on('mousemove', function (e) {
+            var features = map.queryRenderedFeatures(e.point).map(function(feature){ return {layer: {id: feature.layer.id, type: feature.layer.type}, properties:(feature.properties)};});
+            document.getElementById('info').innerHTML = JSON.stringify(features.map(feature=>feature.properties), null, 2);
+        });
+    }
+
+    const colors = ["#686868", "#e60000", "#000000", "#faaa00", "#734c00", "#b2b2b2", "#267300", "#beffdc", "#ffff73", 
+                    "#a3ff73", "#e9ffbe", "#b4d79e", "#7ed2fc", "#ffffff"]
+
+    function showMapLayer(fullTableName, geomType, attrName, attrType, classLabels) {
+        let layerType, paint;
+        const classLabelAndColors = classLabels.reduce((result, key, index)=>{
+            result.push(key);
+            result.push(colors[index % colors.length])
+            return result;
+        }, []);
+        let styledColors;
+        if (classLabels.length < 2) {
+            styledColors = colors[0];
+        } else {
+            switch (attrType) {
+            case  'varchar':
+                styledColors = [
+                    "match",
+                    ["get", attrName],
+                    ...classLabelAndColors,
+                    colors[0]
+                ];
+                break;
+            case 'numeric':
+                styledColors = [
+                    "step",
+                    ["to-number", ["get", attrName]],
+                    ...(classLabelAndColors.slice(1))
+                ]
+                break;
+            default:
+                styledColors = [
+                    "step",
+                    ["get", attrName],
+                    ...(classLabelAndColors.slice(1))
+                ]
+            }
+        }
+        switch (geomType) {
+            case 'MULTIPOLYGON':
+            case 'POLYGON':
+                layerType = 'fill';
+                paint = {
+                    "fill-color": styledColors,
+                    "fill-outline-color": "black",
+                    "fill-opacity": 0.5
+                }
+                break;
+            case 'MULTILINESTRING':
+            case 'LINESTRING':
+                layerType = 'line';
+                paint = {
+                    "line-color": styledColors,
+                    "line-width": 1
+                }
+                break;
+            case 'MULTIPOINT':
+            case 'POINT': 
+                layerType = 'circle';
+                paint = {
+                    "circle-radius": 5,
+                    "circle-color": styledColors,
+                    "circle-stroke-color": "black",
+                    "circle-stroke-width" : 1
+                }
+                break;
+            default: 
+                
+        }
+        if (layerType){
+            const baseUrl = new URL(`./v1/mvt`, window.location.href).href;
+            const url = `${baseUrl}/${fullTableName}/{z}/{x}/{y}?columns=${attrName}`
+            console.log(`url: ${url}`);
+            const layer = {
+                "id": "attrlayer",
+                "type": layerType,
+                "source": {
+                    "type": "vector",
+                    "tiles": [url],
+                },
+                "source-layer": fullTableName,
+                "paint": paint
+            }
+            map.addLayer(layer);
+            document.querySelector("#layerjson").innerHTML = `<pre>${JSON.stringify(layer, null, 2)}</pre>`;
+        }
+        
+    }
     
     function init() {
+        initMap();
         const urlParams = new URLSearchParams(window.location.search);
         const fullTableName = urlParams.get('table');
         const attrName = urlParams.get("column");
         const attrType = urlParams.get("columntype");
+        const geomType = urlParams.get('geomtype');
         document.querySelector('#tablename').innerHTML = fullTableName;
         document.querySelector('#columnname').innerHTML = `${attrName} (${attrType})`;
         document.querySelector('#back').innerHTML = `<a href="tableinfo.html?table=${fullTableName}">Terug naar layer informatie</a>`
@@ -90,7 +221,7 @@
             if (response.ok) {
                 response.json().then(json=> {
                     let histogram, verdeling;
-                    let histLabels = [], verdLabels = [];
+                    let histLabels = [], verdLabels = [], classBorders = [];
                     let arr;
                     switch(attrType) {
                         case "varchar":
@@ -105,6 +236,7 @@
                                 histogram.set(value, count?count+1:1);
                             }
                             histLabels = Array.from(histogram.keys());
+                            classBorders = histLabels;
                             break;
                         case "int4":
                         case "int8":
@@ -159,8 +291,10 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
                                 const end = Math.round(10000 * (linearTicks.min + (i+1) * binwidth)) / 10000;
                                 if (linearTicks.max === linearTicks.min) {
                                     histLabels.push(`${start}`)
+                                    classBorders.push(start);
                                 } else {
                                     histLabels.push(`${start} - ${end}`);
+                                    classBorders.push(end);
                                 }
                             }
                             for (let i = 0; i < arr.length; i++) {
@@ -205,6 +339,7 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
                                 }
                             }
                         });
+                        showMapLayer(fullTableName, geomType, attrName, attrType, classBorders);
                     }
                     if (verdeling) {
                         const values = Array.from(verdeling.values());
@@ -255,6 +390,9 @@ linearTicks.min: ${linearTicks.min}, linearTicks.max: ${linearTicks.max}, linear
     <div id="attrinfo"></div>
     <div class="canvascontainer"><canvas id="histogram" width=1000 height=500></canvas></div>
     <div class="canvascontainer"><canvas id="verdeling" width=1000 height=500></canvas></div>
+    <div id="map"></div>
+    <div id="info"></div>
+    <div id="layerjson"></div>
     <div id="back"></div>
 </body>
 </html>

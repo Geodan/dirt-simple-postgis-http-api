@@ -14,7 +14,7 @@
                     const list = document.querySelector('#layerlist');
                     for (item of json) {
                         const li = document.createElement('li');
-                        li.innerHTML = `<a href="tableinfo.html?table=${item.f_table_schema}.${item.f_table_name}">${item.f_table_schema}.${item.f_table_name}</a>`
+                        li.innerHTML = `<a href="tableinfo.html?table=${item.f_table_schema}.${item.f_table_name}&geomtype=${item.type}">${item.f_table_schema}.${item.f_table_name}</a>`
                         list.appendChild(li);
                     }
                 })
