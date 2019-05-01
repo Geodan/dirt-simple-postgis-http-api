@@ -1,3 +1,5 @@
+const port = 3001;
+
 const express = require('express');
 const logger = require('morgan');
 const fileUpload = require('express-fileupload');
@@ -27,6 +29,13 @@ app.post('/upload', (req, res, next) => {
   )
 });
 
+app.get('/upload', (req, res) =>{
+  url = req.query.fetch;
+  console.log(url);
+  res.json({
+    file: 'index.html'
+  });
+})
 
 app.delete('/upload', express.json({type: '*/*'}), (req, res) => {
     fs.unlinkSync(`${__dirname}/public/files/${req.body.file}`);
@@ -36,6 +45,7 @@ app.delete('/upload', express.json({type: '*/*'}), (req, res) => {
 });
 
 
-app.listen(3001);
+app.listen(port);
+console.log(`upload server listening on port ${port}`)
 
 module.exports = app;
