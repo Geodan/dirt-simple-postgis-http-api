@@ -1,4 +1,7 @@
-const sm = require('@mapbox/sphericalmercator')
+const sm = require('@mapbox/sphericalmercator');
+const fs = require('fs');
+const fsPromises = fs.promises;
+const path = require('path');
 const merc = new sm({
   size: 256
 })
@@ -89,40 +92,149 @@ const schema = {
   }
 }
 
+function cacheDirName(params) {
+  return `${path.dirname(__dirname)}/cache/mvt/${params.table}/${params.z}/${params.x}/${params.y}`
+}
+
+function cacheFileName(query) {
+  if (query.columns) {
+    return query.columns;
+  }
+  return 'noquery';
+}
+
+function getCache(params, query) {
+  const dirname = cacheDirName(params);
+  const filename = cacheFileName(query);
+  
+  console.log(`getCache: ${dirname}`);
+  return fsPromises.readFile(`${dirname}/${filename}`)
+    .then(data=>data)
+    .catch(error=>null);
+}
+
+function setCache(params, query, data) {
+  const dirname = cacheDirName(params);
+  const filename = cacheFileName(query);
+  
+  console.log(`setCache: ${dirname}`);
+  return fsPromises.writeFile(`${dirname}/${filename}`, data)
+    .then(() => {return})
+    .catch(err=>err);
+}
+
+function lockCache(params, query) {
+  const dirname = cacheDirName(params);
+  const filename = cacheFileName(query);
+  fs.mkdirSync(dirname, {recursive: true});
+  return fsPromises.writeFile(`${dirname}/${filename}.lck`, 'lock', {flag: 'wx'})
+    .then(()=>{
+      return true
+    })
+    .catch(err=>{
+      return fsPromises.stat(`${dirname}/${filename}.lck`)
+        .then(st=>{
+          console.log(Date.now() - st.ctimeMs);
+          if (Date.now() - st.ctimeMs > 120000) {
+            return unlockCache(params,query).then(()=>lockCache(params,query));
+          } else {
+            return false;
+          }
+        })
+        .catch(err=>{
+          console.log(err);
+          return false;
+        });
+      });
+}
+
+function unlockCache(params, query){
+  const dirname = cacheDirName(params);
+  const filename = cacheFileName(query);
+  return fsPromises.unlink(`${dirname}/${filename}.lck`)
+    .then(()=>true)
+    .catch(err=>{
+      console.log(`unlockCache: error: ${err}`);
+      return false;
+    })
+}
+
+function wait(ms) {
+  return new Promise((r, j)=>setTimeout(r, ms));
+}
+
+async function waitForCache(params, query) {
+  const dirname = cacheDirName(params);
+  const filename = cacheFileName(query);
+  for (let i = 0; i < 120; i++) {
+    console.log(`waiting for cache.. ${i}`);
+    await wait(1000);
+    data = await getCache(params, query);
+    if (data) {
+      console.log(`cache wait done.. ${i}`)
+      return data;
+    }
+  }
+  console.log(`cache wait failed`);
+  return null;
+}
+
 // create route
 module.exports = function(fastify, opts, next) {
   fastify.route({
     method: 'GET',
     url: '/mvt/:table/:z/:x/:y',
     schema: schema,
-    handler: function(request, reply) {
-      fastify.pg.connect(onConnect)
-
-      function onConnect(err, client, release) {
-        if (err)
-          return reply.send({
-            statusCode: 500,
-            error: 'Internal Server Error',
-            message: 'unable to connect to database server'
-          })
-
-        client.query(sql(request.params, request.query), function onResult(
-          err,
-          result
-        ) {
-          release()
-          if (err) {
-            reply.send(err)
-          } else {
-            const mvt = result.rows[0].st_asmvt
-            if (mvt.length === 0) {
-              reply.code(204)
-            }
-            reply.header('Content-Type', 'application/x-protobuf').send(mvt)
+    handler: async function(request, reply) {
+      const data = await getCache(request.params, request.query);
+      if (data) {
+        if (data.length === 0) {
+          reply.code(204)
+        }
+        reply.header('Content-Type', 'application/x-protobuf').send(data);
+      } else {
+        const lock = await lockCache(request.params, request.query);
+        if (!lock) {
+          console.log('lock failed')
+          const delayedData = await waitForCache(request.params, request.query);
+          if (delayedData.length === 0) {
+            reply.code(204);
           }
-        })
+          reply.header('Content-Type', 'application/x-protobuf').send(delayedData);
+        } else {
+          fastify.pg.connect(onConnect)
+
+          function onConnect(err, client, release) {
+            if (err) {
+              unlockCache(request.params, request.query);
+              return reply.send({
+                statusCode: 500,
+                error: 'Internal Server Error',
+                message: 'unable to connect to database server'
+              })
+            }
+            client.query(sql(request.params, request.query), function onResult(
+              err,
+              result
+            ) {
+              release()
+              if (err) {
+                unlockCache(request.params, request.query);
+                reply.send(err)
+              } else {
+                const mvt = result.rows[0].st_asmvt
+                if (mvt.length === 0) {
+                  reply.code(204)
+                }
+                reply.header('Content-Type', 'application/x-protobuf').send(mvt);
+                setCache(request.params, request.query, mvt);
+                unlockCache(request.params, request.query);
+              }
+            })
+          }
+        }
       }
-    }
+    }  
   })
   next()
 }
