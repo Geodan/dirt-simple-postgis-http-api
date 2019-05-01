@@ -202,7 +202,7 @@
                 
         }
         if (layerType){
-            const baseUrl = new URL(`./v1/mvt`, window.location.href).href;
+            const baseUrl = new URL(`/v1/mvt`, window.location.href).href;
             const url = `${baseUrl}/${fullTableName}/{z}/{x}/{y}?columns="${attrName}"`
             console.log(`url: ${url}`);
             const layer = {
