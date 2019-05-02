@@ -105,8 +105,14 @@
         });
     }
 
-    const colors = ["#686868", "#e60000", "#000000", "#faaa00", "#734c00", "#b2b2b2", "#267300", "#beffdc", "#ffff73", 
-                    "#a3ff73", "#e9ffbe", "#b4d79e", "#7ed2fc", "#ffffff"]
+    const colors1 = ["#686868", "#e60000", "#000000", "#faaa00", "#734c00", "#b2b2b2", "#267300", "#beffdc", "#ffff73", 
+                    "#a3ff73", "#e9ffbe", "#b4d79e", "#7ed2fc", "#ffffff"];
+
+    const colors = ["#14a4ab", "#a9a9a9", "#4e4e4e", "#67ae00", '#febe00', "#e2fe5f", "#ada4fe", '#e8beff', '#d7d79e', 
+                    '#0afeb3', '#a83800', '#73dfff','#69d5b4', '#bee8ff', '#97dbf2', '#feee00', '#e9ffbe', '#97dbf2', 
+                    '#b1d600', '#73b2ff', '#97dbf2', '#fefac2', '#fe8419', '#7ab6f5', '#000000', '#00e6a9', '#b39d3d',
+                    '#97fe00', '#97fe00', '#ffeabe', '#ae974b', '#97dbf2', '#bed2ff', '#73dfff' ,'#97dbf2', '#ffbebe',
+                    '#ac7a9d']
 
     const greenScheme = [{red:247, green:252, blue:253}, {red:0, green:68, blue:27}];
 
@@ -199,6 +205,7 @@
                 }
                 break;
             default: 
+                document.querySelector("#layerjson").innerHTML = `Field geom of type: '${geomType}' not supported<br>Supported types: (MULTI-) POINT/LINE/POLYGON<p>`
                 
         }
         if (layerType){
@@ -256,7 +263,7 @@
                             arr = json
                                 .map(item=>item[attrName])
                                 .filter(value=>value !== null)
-                                .sort()
+                                .sort()                            
                             histogram = new Map();
                             for (let i = 0; i < arr.length; i++) {
                                 const value = arr[i];
