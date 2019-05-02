@@ -135,7 +135,7 @@ function lockCache(params, query) {
       return fsPromises.stat(`${dirname}/${filename}.lck`)
         .then(st=>{
           console.log(Date.now() - st.ctimeMs);
-          if (Date.now() - st.ctimeMs > 120000) {
+          if (Date.now() - st.ctimeMs > 240000) {
             return unlockCache(params,query).then(()=>lockCache(params,query));
           } else {
             return false;
@@ -166,7 +166,7 @@ function wait(ms) {
 async function waitForCache(params, query) {
   const dirname = cacheDirName(params);
   const filename = cacheFileName(query);
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 180; i++) {
     console.log(`waiting for cache.. ${i}`);
     await wait(1000);
     data = await getCache(params, query);
@@ -197,6 +197,14 @@ module.exports = function(fastify, opts, next) {
         if (!lock) {
           console.log('lock failed')
           const delayedData = await waitForCache(request.params, request.query);
+          if (!delayedData) {
+            console.log('return cache wait timeout');
+            return reply.send({
+              statusCode: 500,
+              error: 'Internal Server Error',
+              message: 'cache wait timeout'
+            })
+          }
           if (delayedData.length === 0) {
             reply.code(204);
           }
